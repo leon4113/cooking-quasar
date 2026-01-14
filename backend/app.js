@@ -63,13 +63,11 @@ app.post("/register", async (req, res) => {
 
     res.json({ success: true, user: newuser, token });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Error registering user",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Error registering user",
+      error: error.message,
+    });
   }
 });
 
@@ -92,7 +90,7 @@ app.post("/login", async (req, res) => {
 });
 
 // Fetch user profile
-app.get("/user/:id", async (req, res) => {
+app.get("/user/:id", authenticateToken, async (req, res) => {
   const userId = parseInt(req.params.id);
 
   try {
@@ -114,7 +112,7 @@ app.get("/user/:id", async (req, res) => {
 });
 
 // Update user profile
-app.put("/user/:id", async (req, res) => {
+app.put("/user/:id", authenticateToken, async (req, res) => {
   const userId = parseInt(req.params.id);
   const { username } = req.body;
 
@@ -134,7 +132,7 @@ app.put("/user/:id", async (req, res) => {
 });
 
 // Change user password
-app.put("/user/:id/change-password", async (req, res) => {
+app.put("/user/:id/change-password", authenticateToken, async (req, res) => {
   const userId = parseInt(req.params.id);
   const { oldPassword, newPassword } = req.body;
 
@@ -167,7 +165,7 @@ app.put("/user/:id/change-password", async (req, res) => {
 });
 
 // Generate recipe endpoint
-app.post("/generate-recipe", async (req, res) => {
+app.post("/generate-recipe", authenticateToken, async (req, res) => {
   const { userId, ingredients } = req.body;
   try {
     const gptResponse = await openai.chat.completions.create({
@@ -220,7 +218,7 @@ app.post("/generate-recipe", async (req, res) => {
   }
 });
 
-app.post("/generate-recipe-details", async (req, res) => {
+app.post("/generate-recipe-details", authenticateToken, async (req, res) => {
   const { userId, title, ingredients } = req.body;
   try {
     const gptResponse = await openai.chat.completions.create({
@@ -267,17 +265,15 @@ app.post("/generate-recipe-details", async (req, res) => {
     }
   } catch (error) {
     console.error("Error generating recipe details:", error);
-    res
-      .status(500)
-      .json({
-        message: "Error generating recipe details",
-        error: error.message,
-      });
+    res.status(500).json({
+      message: "Error generating recipe details",
+      error: error.message,
+    });
   }
 });
 
 // Fetch user's past recipes
-app.get("/user/:id/recipes", async (req, res) => {
+app.get("/user/:id/recipes", authenticateToken, async (req, res) => {
   const userId = parseInt(req.params.id);
 
   try {
@@ -295,23 +291,27 @@ app.get("/user/:id/recipes", async (req, res) => {
 });
 
 // Delete a recipe
-app.delete("/user/:userId/recipes/:recipeId", async (req, res) => {
-  const userId = parseInt(req.params.userId);
-  const recipeId = parseInt(req.params.recipeId);
+app.delete(
+  "/user/:userId/recipes/:recipeId",
+  authenticateToken,
+  async (req, res) => {
+    const userId = parseInt(req.params.userId);
+    const recipeId = parseInt(req.params.recipeId);
 
-  try {
-    await prisma.recipe.delete({
-      where: { id: recipeId, userId: userId },
-    });
+    try {
+      await prisma.recipe.delete({
+        where: { id: recipeId, userId: userId },
+      });
 
-    res.json({ message: "Recipe deleted successfully" });
-  } catch (error) {
-    console.error("Error deleting recipe:", error);
-    res
-      .status(500)
-      .json({ message: "Error deleting recipe", error: error.message });
+      res.json({ message: "Recipe deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting recipe:", error);
+      res
+        .status(500)
+        .json({ message: "Error deleting recipe", error: error.message });
+    }
   }
-});
+);
 
 // Default route
 app.get("/", (req, res) => {
