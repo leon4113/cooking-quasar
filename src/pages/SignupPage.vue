@@ -40,8 +40,17 @@ export default {
         });
 
         if (response.data.success) {
+          // Persist auth data so the user is effectively logged in after signup
+          if (response.data.token) {
+            this.$q.localStorage.setItem('token', response.data.token);
+          }
+          if (response.data.user) {
+            this.$q.localStorage.setItem('user', response.data.user);
+            this.$q.localStorage.setItem('userId', response.data.user.id);
+          }
+
           this.$q.notify({ type: 'positive', message: 'Signup successful!' });
-          this.$router.push('/loginpage'); // Redirect to login page after successful signup
+          this.$router.push('/home');
         } else {
           this.$q.notify({ type: 'negative', message: response.data.message });
         }
