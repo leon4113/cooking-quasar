@@ -15,7 +15,8 @@ const SECRET_KEY = process.env.SECRET_KEY;
 
 const openai = new OpenAI();
 
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: "10mb" }));
+app.use(bodyParser.urlencoded({ extended: true, limit: "10mb" }));
 app.use(
   cors({
     origin: process.env.FRONTEND_URL, // Replace this with your actual frontend URL
@@ -161,6 +162,105 @@ app.put("/user/:id/change-password", authenticateToken, async (req, res) => {
     res
       .status(500)
       .json({ message: "Error changing password", error: error.message });
+  }
+});
+
+// Detect ingredients from image using OpenAI Vision API
+app.post("/detect-ingredients", authenticateToken, async (req, res) => {
+  const { imageBase64 } = req.body;
+
+  if (!imageBase64) {
+    return res.status(400).json({ message: "Image is required" });
+  }
+
+  try {
+    const gptResponse = await openai.chat.completions.create({
+      model: "gpt-4o-mini", // Cost-effective model for MVP
+      messages: [
+        {
+          role: "system",
+          content: `You are a food ingredient recognition system.
+
+Tasks:
+1. List all visible ingredients
+2. Group by category (produce, spices, nuts, other)
+3. Mark uncertain items with "?" at the end of the name
+4. Do NOT guess unseen items
+
+Output JSON only.`,
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Identify all visible food ingredients in this image. Group them by category and mark uncertain items with '?'.",
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/jpeg;base64,${imageBase64}`,
+              },
+            },
+          ],
+        },
+      ],
+      max_tokens: 500,
+      temperature: 0.3, // Lower temperature for more consistent results
+      response_format: { type: "json_object" }, // Enforce JSON output
+    });
+
+    if (gptResponse && gptResponse.choices && gptResponse.choices.length > 0) {
+      const content = gptResponse.choices[0].message.content.trim();
+
+      // Parse JSON response
+      let categorizedIngredients;
+      try {
+        categorizedIngredients = JSON.parse(content);
+      } catch (parseError) {
+        console.error("Failed to parse OpenAI response as JSON:", parseError);
+        return res.status(500).json({
+          message: "Failed to parse ingredient detection response",
+          error: parseError.message
+        });
+      }
+
+      // Flatten categorized ingredients into predictions array
+      // Preserve uncertainty markers and add confidence based on them
+      const predictions = [];
+
+      for (const [category, items] of Object.entries(categorizedIngredients)) {
+        if (Array.isArray(items)) {
+          items.forEach(ingredient => {
+            // Check if ingredient has uncertainty marker
+            const isUncertain = ingredient.endsWith('?');
+            const cleanName = isUncertain ? ingredient.slice(0, -1) : ingredient;
+
+            predictions.push({
+              class: cleanName,
+              confidence: isUncertain ? 0.5 : 0.9, // Lower confidence for uncertain items
+              category: category,
+              uncertain: isUncertain
+            });
+          });
+        }
+      }
+
+      res.json({
+        predictions,
+        categorized: categorizedIngredients // Also send categorized format for future use
+      });
+    } else {
+      res.status(500).json({ message: "Invalid response from OpenAI API" });
+    }
+  } catch (error) {
+    console.error("Error detecting ingredients:", error);
+    res
+      .status(500)
+      .json({
+        message: "Error detecting ingredients",
+        error: error.message,
+      });
   }
 });
 

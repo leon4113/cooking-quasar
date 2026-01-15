@@ -2,7 +2,7 @@ import axios from "axios";
 import { LocalStorage } from "quasar";
 
 const api = axios.create({
-  baseURL: "https://cooking-backend-ca04538a2942.herokuapp.com", // Adjust this URL based on your backend server
+  baseURL: "http://localhost:3000", // Adjust this URL based on your backend server
   headers: {
     "Content-Type": "application/json",
   },

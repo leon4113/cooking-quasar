@@ -7,17 +7,43 @@
     />
     <div v-if="detectedIngredients.length">
       <h3>Detected Ingredients:</h3>
-      <ul>
-        <li v-for="ingredient in detectedIngredients" :key="ingredient.class">{{ ingredient.class }}</li>
-      </ul>
-      <q-btn @click="generateRecipe" label="Generate Recipe" color="primary" />
+
+      <!-- Group by category -->
+      <div v-for="(items, category) in groupedIngredients" :key="category" class="q-mb-md">
+        <h5 class="text-capitalize q-mb-sm">{{ category }}</h5>
+        <q-list bordered separator>
+          <q-item v-for="ingredient in items" :key="ingredient.class">
+            <q-item-section>
+              <q-item-label>
+                {{ ingredient.class }}
+                <q-badge
+                  v-if="ingredient.uncertain"
+                  color="orange"
+                  class="q-ml-sm"
+                >
+                  Uncertain
+                </q-badge>
+              </q-item-label>
+              <q-item-label caption>
+                Confidence: {{ (ingredient.confidence * 100).toFixed(0) }}%
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </div>
+
+      <q-btn
+        @click="generateRecipe"
+        label="Generate Recipe"
+        color="primary"
+        class="q-mt-md"
+      />
     </div>
   </q-page>
 </template>
 
 <script>
-import { ref } from 'vue';
-import roboflowService from 'src/services/roboflowService';
+import { ref, computed } from 'vue';
 import api from 'src/api';
 import { useQuasar } from 'quasar';
 import { useRouter } from 'vue-router';
@@ -28,13 +54,43 @@ export default {
     const $q = useQuasar();
     const router = useRouter();
 
+    // Group ingredients by category
+    const groupedIngredients = computed(() => {
+      const groups = {};
+      detectedIngredients.value.forEach(ingredient => {
+        const category = ingredient.category || 'other';
+        if (!groups[category]) {
+          groups[category] = [];
+        }
+        groups[category].push(ingredient);
+      });
+      return groups;
+    });
+
+    const toBase64 = (file) =>
+      new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result.split(",")[1]);
+        reader.onerror = (error) => reject(error);
+      });
+
     const onImageAdded = async (files) => {
       try {
         const image = files[0];
-        const detectionResult = await roboflowService.detectIngredients(image);
-        detectedIngredients.value = detectionResult.predictions;
+        const imageBase64 = await toBase64(image);
+
+        const detectionResult = await api.post("/detect-ingredients", {
+          imageBase64: imageBase64,
+        });
+
+        detectedIngredients.value = detectionResult.data.predictions;
       } catch (error) {
-        console.error('Error detecting ingredients:', error);
+        console.error("Error detecting ingredients:", error);
+        $q.notify({
+          type: "negative",
+          message: "Failed to detect ingredients. Please try again.",
+        });
       }
     };
 
@@ -57,12 +113,17 @@ export default {
         router.push({ name: 'recipes'});
       } catch (error) {
         console.error('Error generating recipe:', error);
+        $q.notify({
+          type: "negative",
+          message: "Failed to generate recipe. Please try again.",
+        });
       }
     };
 
     return {
       onImageAdded,
       detectedIngredients,
+      groupedIngredients,
       generateRecipe,
     };
   }
